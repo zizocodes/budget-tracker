@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>My Perfect Budget Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{
+  font-family:Segoe UI, sans-serif;
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  padding:20px;
+}
+.container{
+  max-width:1400px;
+  margin:auto;
+  background:#fff;
+  border-radius:20px;
+  padding:30px;
+}
+h1{text-align:center}
+
+.buckets{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+  gap:20px;
+  margin:30px 0;
+}
+.bucket{
+  padding:20px;
+  border-radius:15px;
+  box-shadow:0 8px 20px rgba(0,0,0,.1);
+  text-align:center;
+}
+.salary{background:#fef3c7}
+.family{background:#fee2e2}
+.savings{background:#dcfce7}
+.personal{background:#dbeafe}
+.bonus{background:#f3e8ff}
+
+.bucket-amount{
+  font-size:24px;
+  font-weight:bold;
+}
+
+.control-section{
+  background:#f9fafb;
+  padding:20px;
+  border-radius:15px;
+  margin:20px 0;
+}
+
+input,select,button{
+  width:100%;
+  padding:10px;
+  margin:6px 0;
+  font-size:15px;
+}
+
+button{
+  background:#667eea;
+  color:#fff;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
+button:hover{opacity:.9}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+th,td{
+  padding:10px;
+  border-bottom:1px solid #ddd;
+  text-align:center;
+}
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:20px;
+  margin:30px 0;
+}
+.stat{
+  background:#f1f5f9;
+  padding:20px;
+  border-radius:12px;
+  text-align:center;
+  font-weight:bold;
+}
+
+/* SMALLER GRAPHS */
+canvas{
+  max-width:400px;
+  max-height:400px;
+  margin:20px auto;
+  display:block;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>💰 My Perfect Budget Tracker</h1>
+
+<!-- BUCKETS -->
+<div class="buckets">
+  <div class="bucket salary">
+    Salary Reserve
+    <div class="bucket-amount" id="salary">0.000 KWD</div>
+  </div>
+  <div class="bucket family">
+    Family
+    <div class="bucket-amount" id="family">0.000 KWD</div>
+  </div>
+  <div class="bucket savings">
+    Savings
+    <div class="bucket-amount" id="savings">0.000 KWD</div>
+  </div>
+  <div class="bucket personal">
+    Personal
+    <div class="bucket-amount" id="personal">0.000 KWD</div>
+  </div>
+  <div class="bucket bonus">
+    Bonus / Extra
+    <div class="bucket-amount" id="bonus">0.000 KWD</div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat">💳 Card Spent<br><span id="cardSpent">0.000</span> KWD</div>
+  <div class="stat">💵 Cash Spent<br><span id="cashSpent">0.000</span> KWD</div>
+</div>
+
+<!-- ADD MONEY -->
+<div class="control-section">
+<h3>➕ Add Income</h3>
+<select id="incomeType">
+  <option value="salary">Salary</option>
+  <option value="bonus">Bonus / Gift / Side Hustle</option>
+</select>
+<input type="number" id="incomeAmount" placeholder="Amount in KWD" step="0.001">
+<button onclick="addIncome()">Add Income</button>
+</div>
+
+<!-- SPLIT -->
+<div class="control-section">
+<h3>📤 Split Salary</h3>
+<input type="number" id="fPct" value="40"> Family %
+<input type="number" id="sPct" value="30"> Savings %
+<input type="number" id="pPct" value="30"> Personal %
+<button onclick="splitSalary()">Split</button>
+</div>
+
+<!-- SPEND -->
+<div class="control-section">
+<h3>💸 Spend Money</h3>
+<select id="spBucket">
+  <option value="personal">Personal</option>
+  <option value="family">Family</option>
+  <option value="savings">Savings</option>
+  <option value="bonus">Bonus</option>
+</select>
+<input id="spWhat" placeholder="What did you buy?">
+<input type="number" id="spAmount" step="0.001" placeholder="Amount">
+<select id="spMethod">
+  <option value="cash">Cash</option>
+  <option value="card">Card</option>
+</select>
+<button onclick="spend()">Spend</button>
+</div>
+
+<!-- CHARTS -->
+<div class="control-section">
+<h3>📊 Overview</h3>
+<canvas id="bucketChart"></canvas>
+<br>
+<canvas id="paymentChart"></canvas>
+</div>
+
+<!-- TRANSACTIONS -->
+<div class="control-section">
+<h3>📋 Transactions</h3>
+<table>
+<thead>
+<tr><th>Type</th><th>Bucket</th><th>What</th><th>Method</th><th>Amount</th></tr>
+</thead>
+<tbody id="tx"></tbody>
+</table>
+</div>
+
+<button onclick="resetAll()" style="background:#dc2626">Reset All</button>
+
+</div>
+
+<script>
+let data = JSON.parse(localStorage.getItem("budget")) || {
+  salary:0,family:0,savings:0,personal:0,bonus:0,
+  card:0,cash:0,tx:[]
+};
+
+function kwd(x){return (x/1000).toFixed(3)}
+
+function save(){localStorage.setItem("budget",JSON.stringify(data))}
+
+function update(){
+  salary.textContent=kwd(data.salary)+" KWD";
+  family.textContent=kwd(data.family)+" KWD";
+  savings.textContent=kwd(data.savings)+" KWD";
+  personal.textContent=kwd(data.personal)+" KWD";
+  bonus.textContent=kwd(data.bonus)+" KWD";
+  cardSpent.textContent=kwd(data.card);
+  cashSpent.textContent=kwd(data.cash);
+  renderTx();
+  drawCharts();
+  save();
+}
+
+function addIncome(){
+  let amt=Number(incomeAmount.value)*1000;
+  if(!amt)return alert("Enter amount");
+  data[incomeType.value]+=amt;
+  data.tx.unshift({t:"Income",b:incomeType.value,w:"Added",m:"-",a:amt});
+  incomeAmount.value="";
+  update();
+}
+
+function splitSalary(){
+  if(!data.salary)return alert("No salary");
+  let f=+fPct.value,s=+sPct.value,p=+pPct.value;
+  if(f+s+p!==100)return alert("Must be 100%");
+  data.family+=data.salary*f/100;
+  data.savings+=data.salary*s/100;
+  data.personal+=data.salary*p/100;
+  data.salary=0;
+  update();
+}
+
+function spend(){
+  let b=spBucket.value;
+  let amt=Number(spAmount.value)*1000;
+  if(!spWhat.value||!amt)return alert("Fill all");
+  if(data[b]<amt)return alert("Not enough");
+  data[b]-=amt;
+  if(spMethod.value==="card")data.card+=amt;
+  else data.cash+=amt;
+  data.tx.unshift({t:"Expense",b,w:spWhat.value,m:spMethod.value,a:amt});
+  spWhat.value="";spAmount.value="";
+  update();
+}
+
+function renderTx(){
+  tx.innerHTML="";
+  data.tx.slice(0,10).forEach(x=>{
+    tx.innerHTML+=`<tr>
+    <td>${x.t}</td><td>${x.b}</td><td>${x.w}</td>
+    <td>${x.m}</td><td>${kwd(x.a)}</td></tr>`;
+  });
+}
+
+let bucketChart,paymentChart;
+
+function drawCharts(){
+  bucketChart?.destroy();
+  paymentChart?.destroy();
+
+  bucketChart=new Chart(document.getElementById("bucketChart"),{
+    type:"doughnut",
+    data:{
+      labels:["Family","Savings","Personal","Bonus"],
+      datasets:[{data:[data.family,data.savings,data.personal,data.bonus],backgroundColor:['#fee2e2','#dcfce7','#dbeafe','#f3e8ff']}]
+    },
+    options:{responsive:true,maintainAspectRatio:true}
+  });
+
+  paymentChart=new Chart(document.getElementById("paymentChart"),{
+    type:"pie",
+    data:{
+      labels:["Cash","Card"],
+      datasets:[{data:[data.cash,data.card],backgroundColor:['#34d399','#60a5fa']}]
+    },
+    options:{responsive:true,maintainAspectRatio:true}
+  });
+}
+
+function resetAll(){
+  if(confirm("Reset everything?")){
+    localStorage.removeItem("budget");
+    location.reload();
+  }
+}
+
+update();
+</script>
+</body>
+</html>
